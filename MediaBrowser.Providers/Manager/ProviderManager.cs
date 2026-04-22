@@ -441,11 +441,12 @@ namespace MediaBrowser.Providers.Manager
             where T : BaseItem
         {
             var localMetadataReaderOrder = libraryOptions.LocalMetadataReaderOrder ?? globalMetadataOptions.LocalMetadataReaderOrder;
+            var disabledLocalMetadataReaders = libraryOptions.DisabledLocalMetadataReaders;
             var typeOptions = libraryOptions.GetTypeOptions(item.GetType().Name);
             var metadataFetcherOrder = typeOptions?.MetadataFetcherOrder ?? globalMetadataOptions.MetadataFetcherOrder;
 
             return _metadataProviders.OfType<IMetadataProvider<T>>()
-                .Where(i => CanRefreshMetadata(i, item, typeOptions, includeDisabled, forceEnableInternetMetadata))
+                .Where(i => CanRefreshMetadata(i, item, typeOptions, disabledLocalMetadataReaders, includeDisabled, forceEnableInternetMetadata))
                 .OrderBy(i =>
                     // local and remote providers will be interleaved in the final order
                     // only relative order within a type matters: consumers of the list filter to one or the other
@@ -463,12 +464,22 @@ namespace MediaBrowser.Providers.Manager
             IMetadataProvider provider,
             BaseItem item,
             TypeOptions? libraryTypeOptions,
+            string[] disabledLocalMetadataReaders,
             bool includeDisabled,
             bool forceEnableInternetMetadata)
         {
             if (!item.SupportsLocalMetadata && provider is ILocalMetadataProvider)
             {
                 return false;
+            }
+
+            // Check if this local metadata reader is disabled in library options
+            if (provider is ILocalMetadataProvider && disabledLocalMetadataReaders.Length > 0)
+            {
+                if (disabledLocalMetadataReaders.Contains(provider.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
             }
 
             if (includeDisabled)
