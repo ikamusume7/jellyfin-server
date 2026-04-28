@@ -1030,10 +1030,10 @@ namespace MediaBrowser.Providers.Manager
                 return;
             }
 
-            _refreshQueue.Enqueue((itemId, options), priority);
-
             lock (_refreshQueueLock)
             {
+                _refreshQueue.Enqueue((itemId, options), priority);
+
                 if (!_isProcessingRefreshQueue)
                 {
                     _isProcessingRefreshQueue = true;
@@ -1053,8 +1053,17 @@ namespace MediaBrowser.Providers.Manager
 
             var cancellationToken = _disposeCancellationTokenSource.Token;
 
-            while (_refreshQueue.TryDequeue(out var refreshItem, out _))
+            while (true)
             {
+                (Guid ItemId, MetadataRefreshOptions RefreshOptions) refreshItem;
+                lock (_refreshQueueLock)
+                {
+                    if (!_refreshQueue.TryDequeue(out refreshItem, out _))
+                    {
+                        break;
+                    }
+                }
+
                 if (_disposed)
                 {
                     return;
@@ -1062,6 +1071,11 @@ namespace MediaBrowser.Providers.Manager
 
                 try
                 {
+                    if (refreshItem.ItemId.IsEmpty())
+                    {
+                        continue;
+                    }
+
                     var item = libraryManager.GetItemById(refreshItem.ItemId);
                     if (item is null)
                     {
